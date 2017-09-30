@@ -1,12 +1,21 @@
-//! Provides implementations of high-accuracy projectively-extended rational numbers.
+//! Provides implementations of high-accuracy projectively-extended rational numbers
 //!
-//! Projectively-extended rationals differ from normal rationals because they have a
-//! single, signless infinity and a single, signless zero. This means that `1/0`
+//! Projectively-extended rationals differ from normal rationals because they have
+//! a single, signless infinity and a single, signless zero. This means that `1/0`
 //! can be defined as equal to `∞` and `1/∞` equal to `0`.
+//!
+//! # Infinity
 //!
 //! For unsigned numbers, `∞` is greater than every number, whereas with signed numbers,
 //! `∞` is not comparable to any number but itself. This is because `∞` equals `-∞` so no
-//! complete ordering can exist.
+//! ordering can exist.
+//!
+//! # NaN
+//!
+//! `∞ + ∞`, `∞ - ∞`, `∞ * 0`, `0 * ∞`, `∞ / ∞`, and `0 / 0` are all `NaN`
+//!
+//! A value of `NaN` in any operation always returns `NaN`. `NaN` is not ordered and
+//! is not equal to any number, including itself.
 
 use std::*;
 use std::cmp::*;
@@ -104,6 +113,11 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
 }
 
 /// A type representing an unsigned projectively-extended rational number
+///
+/// Subtracting a large number from a smaller one always returns `0` unless
+/// the smaller number is `∞`.
+///
+/// # Example
 ///
 /// ```
 /// use extended_rational::URational;
@@ -248,7 +262,7 @@ impl URational {
     }
 
     fn add_sub(&mut self, other: &mut URational, sub: bool) {
-        if sub && other > self {
+        if sub && other > self && !other.is_infinity() {
             *self = URational::zero();
             return;
         }
@@ -428,6 +442,8 @@ impl fmt::Debug for URational {
 }
 
 /// A type representing a signed projectively-extended rational number
+///
+/// # Example
 ///
 /// ```
 /// use extended_rational::Rational;
