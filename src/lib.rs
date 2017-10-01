@@ -16,10 +16,70 @@
 //!
 //! A value of `NaN` in any operation always returns `NaN`. `NaN` is not ordered and
 //! is not equal to any number, including itself.
+//!
+//! # Panics
+//!
+//! No operation should ever panic. Operations that overflow round each input to a
+//! simpler fraction until they can succeed. Any invalid operations should
+//! return `NaN` instead of panicking.
 
 use std::*;
 use std::cmp::*;
 use std::ops::*;
+
+/// A macro for creating a new signed rational using a given ratio
+///
+/// # Alternatives
+///
+/// * `ratio!(n, d)` is equivalent to `Rational::new(n, d)` for non-`u64` inputs
+/// * `ratio!(n)` is equivalent to `Rational::from(n)`
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate extended_rational;
+/// # use extended_rational::Rational;
+/// # fn main() {
+/// let five_thirds = ratio!(5, 3);
+/// let neg_seventeen = ratio!(-17);
+///
+/// assert_eq!(five_thirds, Rational::new(5, 3));
+/// assert_eq!(neg_seventeen, Rational::from(-17));
+/// # }
+/// ```
+#[macro_export]
+macro_rules! ratio {
+    ( $n: expr, $d: expr ) => ( Rational::from(($n, $d)) );
+    ( $n: expr ) => ( Rational::from($n) )
+}
+
+/// A macro for creating a new unsigned rational using a given ratio
+///
+/// # Alternatives
+///
+/// * `uratio!(n, d)` is equivalent to `URational::new(n, d)`
+/// * `uratio!(n)` is equivalent to `URational::from(n)`
+///
+/// # Examples
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate extended_rational;
+/// # use extended_rational::URational;
+/// # fn main() {
+/// let five_thirds = uratio!(5, 3);
+/// let seventeen = uratio!(17);
+///
+/// assert_eq!(five_thirds, URational::new(5, 3));
+/// assert_eq!(seventeen, URational::from(17u64));
+/// # }
+/// ```
+#[macro_export]
+macro_rules! uratio {
+    ( $n: expr, $d: expr ) => ( URational::new($n as u64, $d as u64) );
+    ( $n: expr ) => ( URational::new($n as u64, 1) )
+}
 
 macro_rules! try_or {
     (continue $x: expr) => {
@@ -44,9 +104,53 @@ macro_rules! impl_u_from {
                     URational::new(n as u64, 1)
                 }
             }
+            impl From<($t, $t)> for URational {
+                fn from(tuple: ($t, $t)) -> URational {
+                    let (n, d) = tuple;
+                    URational::new(n as u64, d as u64)
+                }
+            }
+            impl From<[$t; 2]> for URational {
+                fn from(array: [$t; 2]) -> URational {
+                    URational::new(array[0] as u64, array[1] as u64)
+                }
+            }
+            impl From<($t, $t)> for Rational {
+                fn from(tuple: ($t, $t)) -> Rational {
+                    Rational::from(URational::from(tuple))
+                }
+            }
             impl From<$t> for Rational {
                 fn from(n: $t) -> Rational {
                     Rational::from(URational::from(n))
+                }
+            }
+            impl From<[$t; 2]> for Rational {
+                fn from(array: [$t; 2]) -> Rational {
+                    Rational::from(URational::from(array))
+                }
+            }
+        )+
+    }
+}
+
+macro_rules! impl_from {
+    ($($t: ty)+) => {
+        $(
+            impl From<$t> for Rational {
+                fn from(n: $t) -> Rational {
+                    Rational::new(n as i64, 1)
+                }
+            }
+            impl From<($t, $t)> for Rational {
+                fn from(tuple: ($t, $t)) -> Rational {
+                    let (n, d) = tuple;
+                    Rational::new(n as i64, d as i64)
+                }
+            }
+            impl From<[$t; 2]> for Rational {
+                fn from(array: [$t; 2]) -> Rational {
+                    Rational::new(array[0] as i64, array[1] as i64)
                 }
             }
         )+
@@ -64,18 +168,6 @@ macro_rules! impl_to {
             impl From<Rational> for $t {
                 fn from(r: Rational) -> $t {
                     (if r.negative { -1.0 } else { 1.0 }) * (r.unsigned.numerator as $t) / (r.unsigned.denominator as $t)
-                }
-            }
-        )+
-    }
-}
-
-macro_rules! impl_from {
-    ($($t: ty)+) => {
-        $(
-            impl From<$t> for Rational {
-                fn from(n: $t) -> Rational {
-                    Rational::new(n as i64, 1)
                 }
             }
         )+
@@ -103,7 +195,8 @@ macro_rules! impl_ops {
     }
 }
 
-fn gcd(mut a: u64, mut b: u64) -> u64 {
+/// Returns the greatest common divisor of two numbers
+pub fn gcd(mut a: u64, mut b: u64) -> u64 {
     while b != 0 {
         let c = b;
         b = a % b;
@@ -112,12 +205,18 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
     a
 }
 
+/// Returns the least common multiple of two numbers
+/// or `None` if the calculation overflows
+pub fn lcm(a: u64, b: u64) -> Option<u64> {
+    a.checked_mul(b/gcd(a, b))
+}
+
 /// A type representing an unsigned projectively-extended rational number
 ///
 /// Subtracting a large number from a smaller one always returns `0` unless
-/// the smaller number is `∞`.
+/// the larger number is `∞`.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use extended_rational::URational;
@@ -292,8 +391,7 @@ impl URational {
                 self.simplify();
                 return;
             }
-            let common = gcd(self.denominator, other.denominator);
-            let c = try_or!(continue self.denominator.checked_mul(other.denominator/common));
+            let c = try_or!(continue lcm(self.denominator, other.denominator));
             let a = c / self.denominator;
             let b = c / other.denominator;
             let n0 = try_or!(continue self.numerator.checked_mul(a));
@@ -370,8 +468,7 @@ impl URational {
                 self.simplify();
                 return;
             }
-            let common = gcd(self.denominator, other.denominator);
-            let c = try_or!(continue self.denominator.checked_mul(other.denominator/common));
+            let c = try_or!(continue lcm(self.denominator, other.denominator));
             let a = c / self.denominator;
             let b = c / other.denominator;
             let n0 = try_or!(continue self.numerator.checked_mul(a));
@@ -443,7 +540,7 @@ impl fmt::Debug for URational {
 
 /// A type representing a signed projectively-extended rational number
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// use extended_rational::Rational;
@@ -699,6 +796,13 @@ impl Neg for Rational {
 impl From<URational> for Rational {
     fn from(r: URational) -> Rational {
         Rational::new_raw(r, false)
+    }
+}
+
+impl From<(URational, bool)> for Rational {
+    fn from(tuple: (URational, bool)) -> Rational {
+        let (unsigned, negative) = tuple;
+        Rational::new_raw(unsigned, negative)
     }
 }
 

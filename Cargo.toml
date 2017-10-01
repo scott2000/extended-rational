@@ -1,6 +1,6 @@
 [package]
 name = "extended-rational"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["Scott Taylor <scott11x8@gmail.com>"]
 
 description = "Provides implementations of high-accuracy projectively-extended rational numbers."
