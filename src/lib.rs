@@ -27,7 +27,9 @@ use std::*;
 use std::cmp::*;
 use std::ops::*;
 
-/// A macro for creating a new signed rational using a given ratio
+/// A macro for creating a new [signed rational](struct.Rational.html) using a given ratio or decimal
+///
+/// *Floating-point conversions may be wrong due to small rounding errors.*
 ///
 /// # Alternatives
 ///
@@ -42,24 +44,30 @@ use std::ops::*;
 /// # use extended_rational::Rational;
 /// # fn main() {
 /// let five_thirds = ratio!(5, 3);
-/// let neg_seventeen = ratio!(-17);
+/// let neg_seven_and_a_half = ratio!(-7.5);
 ///
 /// assert_eq!(five_thirds, Rational::from([5, 3]));
-/// assert_eq!(neg_seventeen, Rational::from(-17));
+/// assert_eq!(neg_seven_and_a_half, Rational::new(-15, 2));
 /// # }
 /// ```
 #[macro_export]
 macro_rules! ratio {
-    ( $n: expr, $d: expr ) => ( $crate::Rational::from([$n, $d]) );
-    ( $n: expr ) => ( $crate::Rational::from($n) )
+    ( $ n : expr , $ d : expr ) => ( $crate::Rational::from([$n, $d]) );
+    ( $ n : expr ) => ( $crate::Rational::from($n) );
 }
 
-/// A macro for creating a new unsigned rational using a given ratio
+/// A macro for creating a new [unsigned rational](struct.URational.html) using a given ratio
+///
+/// *Floating-point conversions may be wrong due to small rounding errors.*
+///
+/// # Panics
+///
+/// On attempt to create negative rational. Doesn't panic in optimized builds.
 ///
 /// # Alternatives
 ///
-/// * `uratio!(n, d)` is equivalent to `URational::new(n, d)`
-/// * `uratio!(n)` is equivalent to `URational::new(n, 1)`
+/// * `uratio!(n, d)` is equivalent to `ratio!(n, d).try_unsigned()`
+/// * `uratio!(n)` is equivalent to `ratio!(n).try_unsigned()`
 ///
 /// # Examples
 ///
@@ -77,8 +85,12 @@ macro_rules! ratio {
 /// ```
 #[macro_export]
 macro_rules! uratio {
-    ( $n: expr, $d: expr ) => ( $crate::URational::new($n as u64, $d as u64) );
-    ( $n: expr ) => ( $crate::URational::new($n as u64, 1) )
+    ( $ n : expr , $ d : expr ) => {{
+        $crate::Rational::from([$n, $d]).try_unsigned()
+    }};
+    ( $ n : expr ) => {{
+        $crate::Rational::from($n).try_unsigned()
+    }};
 }
 
 macro_rules! try_or {
@@ -144,20 +156,20 @@ macro_rules! impl_from {
     ($($t: ty)+) => {
         $(
             impl From<$t> for Rational {
-                /// Create a new signed rational with the given value
+                /// Creates a new signed rational with the given value
                 fn from(n: $t) -> Rational {
                     Rational::new(n as i64, 1)
                 }
             }
             impl From<($t, $t)> for Rational {
-                /// Create a new signed rational with the given numerator and denominator tuple
+                /// Creates a new signed rational with the given numerator and denominator tuple
                 fn from(tuple: ($t, $t)) -> Rational {
                     let (n, d) = tuple;
                     Rational::new(n as i64, d as i64)
                 }
             }
             impl From<[$t; 2]> for Rational {
-                /// Create a new signed rational with the given numerator and denominator array
+                /// Creates a new signed rational with the given numerator and denominator array
                 fn from(array: [$t; 2]) -> Rational {
                     Rational::new(array[0] as i64, array[1] as i64)
                 }
@@ -166,19 +178,55 @@ macro_rules! impl_from {
     }
 }
 
-macro_rules! impl_to {
-    ($($t: ty)+) => {
+macro_rules! impl_float {
+    ($($t: ty [$total: expr, $sig: expr])+) => {
         $(
-            /// Create an approximation of a given unsigned rational
             impl From<URational> for $t {
+                /// Creates an approximation of the given unsigned rational
                 fn from(r: URational) -> $t {
                     (r.numerator as $t) / (r.denominator as $t)
                 }
             }
-            /// Create an approximation of a given signed rational
             impl From<Rational> for $t {
+                /// Creates an approximation of the given signed rational
                 fn from(r: Rational) -> $t {
                     (if r.negative { -1.0 } else { 1.0 }) * (r.unsigned.numerator as $t) / (r.unsigned.denominator as $t)
+                }
+            }
+            impl From<$t> for Rational {
+                /// Attempts to approximate the given floating-point number with a signed rational
+                ///
+                /// # Rounding
+                ///
+                /// If the exponent is too large, `∞` will be returned
+                ///
+                /// If the exponent is too small, `0` will be returned
+                fn from(f: $t) -> Rational {
+                    match f.classify() {
+                        std::num::FpCategory::Infinite => return Rational::infinity(),
+                        std::num::FpCategory::Nan => return Rational::nan(),
+                        std::num::FpCategory::Zero | std::num::FpCategory::Subnormal => return Rational::zero(),
+                        _ => (),
+                    }
+
+                    let bits = f.to_bits() as u64;
+                    let neg = (bits >> ($total - 1)) == 1;
+                    let exponent = ((bits >> $sig) & ((1u64 << ($total - 1 - $sig)) - 1)) as i32 - ((1i32 << ($total - 2 - $sig)) - 1) - $sig;
+                    let significand = (1u64 << $sig) + (bits & ((1u64 << $sig) - 1));
+
+                    if exponent < 0 {
+                        if let Some(modifier) = 1u64.checked_shl(-exponent as u32) {
+                            Rational::new_raw(URational::new(significand, modifier), neg)
+                        } else {
+                            Rational::zero()
+                        }
+                    } else {
+                        if let Some(sig_mod) = significand.checked_shl(exponent as u32) {
+                            Rational::new_raw(URational::new(sig_mod, 1), neg)
+                        } else {
+                            Rational::infinity()
+                        }
+                    }
                 }
             }
         )+
@@ -236,6 +284,30 @@ pub fn lcm(a: u64, b: u64) -> Option<u64> {
 /// let b = URational::new(4, 7);
 ///
 /// assert_eq!(a+b, URational::new(89, 119));
+/// ```
+///
+/// Use the [uratio!](macro.uratio.html) macro for more convenient use
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate extended_rational;
+/// # #[allow(unused_variables)]
+/// # fn main() {
+/// let a = uratio!(3, 17);
+/// let b = uratio!(4, 7);
+/// # }
+/// ```
+///
+/// Or for easy conversions from primitive types
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate extended_rational;
+/// # #[allow(unused_variables)]
+/// # fn main() {
+/// let a = uratio!(343.863);
+/// let b = uratio!(2u8);
+/// # }
 /// ```
 #[derive(Copy, Clone)]
 pub struct URational {
@@ -528,6 +600,13 @@ impl PartialOrd for URational {
 }
 
 impl fmt::Display for URational {
+    /// Formats the rational
+    ///
+    /// # Style
+    ///
+    /// * `NaN`, `∞`, and whole numbers are written directly
+    /// * Ratios with complexities less than 100 are written as fractions (`n/d`)
+    /// * All other numbers are written as decimals
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         if self.denominator == 1 {
             write!(f, "{}", self.numerator)
@@ -537,13 +616,20 @@ impl fmt::Display for URational {
             } else {
                 write!(f, "∞")
             }
-        } else {
+        } else if self.complexity() < 100 {
             write!(f, "{}/{}", self.numerator, self.denominator)
+        } else {
+            write!(f, "{}", self.numerator as f64 / self.denominator as f64)
         }
     }
 }
 
 impl fmt::Debug for URational {
+    /// Formats the rational
+    ///
+    /// # Style
+    ///
+    /// All numbers are written as fractions in parentheses `(n/d)`
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "({}/{})", self.numerator, self.denominator)
     }
@@ -560,6 +646,30 @@ impl fmt::Debug for URational {
 /// let b = Rational::new(-4, 7);
 ///
 /// assert_eq!(a+b, Rational::new(-47, 119));
+/// ```
+///
+/// Use the [ratio!](macro.ratio.html) macro for more convenient use
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate extended_rational;
+/// # #[allow(unused_variables)]
+/// # fn main() {
+/// let a = ratio!(3, 17);
+/// let b = ratio!(-4, 7);
+/// # }
+/// ```
+///
+/// Or for easy conversions from primitive types
+///
+/// ```
+/// # #[macro_use]
+/// # extern crate extended_rational;
+/// # #[allow(unused_variables)]
+/// # fn main() {
+/// let a = ratio!(-77.332);
+/// let b = ratio!(2u8);
+/// # }
 /// ```
 #[derive(Copy, Clone)]
 pub struct Rational {
@@ -693,6 +803,17 @@ impl Rational {
         }
     }
 
+    /// Returns this rational as a URational
+    ///
+    /// # Panics
+    ///
+    /// If this rational is negative. Doesn't panic in optimized builds.
+    #[inline]
+    pub fn try_unsigned(self) -> URational {
+        debug_assert!(!self.negative, "cannot create a URational with a negative sign.");
+        self.unsigned
+    }
+
     fn check_sign(&mut self) {
         if !self.unsigned.is_signed() {
             self.negative = false;
@@ -762,6 +883,13 @@ impl PartialOrd for Rational {
 }
 
 impl fmt::Display for Rational {
+    /// Formats the rational
+    ///
+    /// # Style
+    ///
+    /// * `NaN`, `∞`, and whole numbers are written directly
+    /// * Ratios with complexities less than 100 are written as fractions (`n/d`)
+    /// * All other numbers are written as decimals
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         if self.negative {
             write!(f, "-{}", self.unsigned)
@@ -772,11 +900,16 @@ impl fmt::Display for Rational {
 }
 
 impl fmt::Debug for Rational {
+    /// Formats the rational
+    ///
+    /// # Style
+    ///
+    /// All numbers are written as fractions in parentheses `(n/d)`
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         if self.negative {
-            write!(f, "-{:?}", self.unsigned)
+            write!(f, "(-{}/{})", self.unsigned.numerator, self.unsigned.denominator)
         } else {
-            write!(f, "{:?}", self.unsigned)
+            write!(f, "({}/{})", self.unsigned.numerator, self.unsigned.denominator)
         }
     }
 }
@@ -822,4 +955,4 @@ impl From<(URational, bool)> for Rational {
 impl_u_from!(u64 u32 u16 u8);
 
 impl_from!(i64 i32 i16 i8);
-impl_to!(f64 f32);
+impl_float!(f64 [64, 52] f32 [32, 23]);
