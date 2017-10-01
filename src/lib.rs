@@ -31,7 +31,7 @@ use std::ops::*;
 ///
 /// # Alternatives
 ///
-/// * `ratio!(n, d)` is equivalent to `Rational::new(n, d)` for non-`u64` inputs
+/// * `ratio!(n, d)` is equivalent to `Rational::from([n, d])`
 /// * `ratio!(n)` is equivalent to `Rational::from(n)`
 ///
 /// # Examples
@@ -44,13 +44,13 @@ use std::ops::*;
 /// let five_thirds = ratio!(5, 3);
 /// let neg_seventeen = ratio!(-17);
 ///
-/// assert_eq!(five_thirds, Rational::new(5, 3));
+/// assert_eq!(five_thirds, Rational::from([5, 3]));
 /// assert_eq!(neg_seventeen, Rational::from(-17));
 /// # }
 /// ```
 #[macro_export]
 macro_rules! ratio {
-    ( $n: expr, $d: expr ) => ( Rational::from(($n, $d)) );
+    ( $n: expr, $d: expr ) => ( Rational::from([$n, $d]) );
     ( $n: expr ) => ( Rational::from($n) )
 }
 
@@ -59,7 +59,7 @@ macro_rules! ratio {
 /// # Alternatives
 ///
 /// * `uratio!(n, d)` is equivalent to `URational::new(n, d)`
-/// * `uratio!(n)` is equivalent to `URational::from(n)`
+/// * `uratio!(n)` is equivalent to `URational::new(n, 1)`
 ///
 /// # Examples
 ///
@@ -72,7 +72,7 @@ macro_rules! ratio {
 /// let seventeen = uratio!(17);
 ///
 /// assert_eq!(five_thirds, URational::new(5, 3));
-/// assert_eq!(seventeen, URational::from(17u64));
+/// assert_eq!(seventeen, URational::new(17, 1));
 /// # }
 /// ```
 #[macro_export]
@@ -100,32 +100,38 @@ macro_rules! impl_u_from {
     ($($t: ty)+) => {
         $(
             impl From<$t> for URational {
+                /// Create a new unsigned rational with the given value
                 fn from(n: $t) -> URational {
                     URational::new(n as u64, 1)
                 }
             }
             impl From<($t, $t)> for URational {
+                /// Create a new unsigned rational with the given numerator and denominator tuple
                 fn from(tuple: ($t, $t)) -> URational {
                     let (n, d) = tuple;
                     URational::new(n as u64, d as u64)
                 }
             }
             impl From<[$t; 2]> for URational {
+                /// Create a new unsigned rational with the given numerator and denominator array
                 fn from(array: [$t; 2]) -> URational {
                     URational::new(array[0] as u64, array[1] as u64)
                 }
             }
-            impl From<($t, $t)> for Rational {
-                fn from(tuple: ($t, $t)) -> Rational {
-                    Rational::from(URational::from(tuple))
-                }
-            }
             impl From<$t> for Rational {
+                /// Create a new signed rational with the given value
                 fn from(n: $t) -> Rational {
                     Rational::from(URational::from(n))
                 }
             }
+            impl From<($t, $t)> for Rational {
+                /// Create a new signed rational with the given numerator and denominator tuple
+                fn from(tuple: ($t, $t)) -> Rational {
+                    Rational::from(URational::from(tuple))
+                }
+            }
             impl From<[$t; 2]> for Rational {
+                /// Create a new signed rational with the given numerator and denominator array
                 fn from(array: [$t; 2]) -> Rational {
                     Rational::from(URational::from(array))
                 }
@@ -138,17 +144,20 @@ macro_rules! impl_from {
     ($($t: ty)+) => {
         $(
             impl From<$t> for Rational {
+                /// Create a new signed rational with the given value
                 fn from(n: $t) -> Rational {
                     Rational::new(n as i64, 1)
                 }
             }
             impl From<($t, $t)> for Rational {
+                /// Create a new signed rational with the given numerator and denominator tuple
                 fn from(tuple: ($t, $t)) -> Rational {
                     let (n, d) = tuple;
                     Rational::new(n as i64, d as i64)
                 }
             }
             impl From<[$t; 2]> for Rational {
+                /// Create a new signed rational with the given numerator and denominator array
                 fn from(array: [$t; 2]) -> Rational {
                     Rational::new(array[0] as i64, array[1] as i64)
                 }
@@ -160,11 +169,13 @@ macro_rules! impl_from {
 macro_rules! impl_to {
     ($($t: ty)+) => {
         $(
+            /// Create an approximation of a given unsigned rational
             impl From<URational> for $t {
                 fn from(r: URational) -> $t {
                     (r.numerator as $t) / (r.denominator as $t)
                 }
             }
+            /// Create an approximation of a given signed rational
             impl From<Rational> for $t {
                 fn from(r: Rational) -> $t {
                     (if r.negative { -1.0 } else { 1.0 }) * (r.unsigned.numerator as $t) / (r.unsigned.denominator as $t)
@@ -794,12 +805,14 @@ impl Neg for Rational {
 }
 
 impl From<URational> for Rational {
+    /// Create a new signed rational from an unsigned rational
     fn from(r: URational) -> Rational {
         Rational::new_raw(r, false)
     }
 }
 
 impl From<(URational, bool)> for Rational {
+    /// Create a new signed rational from an unsigned rational and a sign
     fn from(tuple: (URational, bool)) -> Rational {
         let (unsigned, negative) = tuple;
         Rational::new_raw(unsigned, negative)
