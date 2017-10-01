@@ -50,8 +50,8 @@ use std::ops::*;
 /// ```
 #[macro_export]
 macro_rules! ratio {
-    ( $n: expr, $d: expr ) => ( Rational::from([$n, $d]) );
-    ( $n: expr ) => ( Rational::from($n) )
+    ( $n: expr, $d: expr ) => ( $crate::Rational::from([$n, $d]) );
+    ( $n: expr ) => ( $crate::Rational::from($n) )
 }
 
 /// A macro for creating a new unsigned rational using a given ratio
@@ -77,8 +77,8 @@ macro_rules! ratio {
 /// ```
 #[macro_export]
 macro_rules! uratio {
-    ( $n: expr, $d: expr ) => ( URational::new($n as u64, $d as u64) );
-    ( $n: expr ) => ( URational::new($n as u64, 1) )
+    ( $n: expr, $d: expr ) => ( $crate::URational::new($n as u64, $d as u64) );
+    ( $n: expr ) => ( $crate::URational::new($n as u64, 1) )
 }
 
 macro_rules! try_or {
