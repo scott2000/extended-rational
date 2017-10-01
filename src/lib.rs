@@ -56,7 +56,7 @@ macro_rules! ratio {
     ( $ n : expr ) => ( $crate::Rational::from($n) );
 }
 
-/// A macro for creating a new [unsigned rational](struct.URational.html) using a given ratio
+/// A macro for creating a new [unsigned rational](struct.URational.html) using a given ratio or decimal
 ///
 /// *Floating-point conversions may be wrong due to small rounding errors.*
 ///
