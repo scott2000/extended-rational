@@ -7,6 +7,6 @@ description = "Provides implementations of high-accuracy projectively-extended r
 keywords = ["rational", "extended", "number", "infinity"]
 
 license = "MIT"
-include = ["src/**/*", "Cargo.toml"]
+include = ["src/**/*", "Cargo.toml", "LICENSE"]
 
 [dependencies]
