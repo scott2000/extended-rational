@@ -52,8 +52,8 @@ use std::ops::*;
 /// ```
 #[macro_export]
 macro_rules! ratio {
-    ( $ n : expr , $ d : expr ) => ( $crate::Rational::from([$n, $d]) );
-    ( $ n : expr ) => ( $crate::Rational::from($n) );
+    ( $n: expr , $d: expr ) => ( $crate::Rational::from([$n, $d]) );
+    ( $n: expr ) => ( $crate::Rational::from($n) );
 }
 
 /// A macro for creating a new [unsigned rational](struct.URational.html) using a given ratio or decimal
@@ -85,10 +85,10 @@ macro_rules! ratio {
 /// ```
 #[macro_export]
 macro_rules! uratio {
-    ( $ n : expr , $ d : expr ) => {{
+    ( $n: expr , $d: expr ) => {{
         $crate::Rational::from([$n, $d]).try_unsigned()
     }};
-    ( $ n : expr ) => {{
+    ( $n: expr ) => {{
         $crate::Rational::from($n).try_unsigned()
     }};
 }
