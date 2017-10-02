@@ -1,4 +1,5 @@
 //! Provides implementations of high-accuracy projectively-extended rational numbers
+//! and macros for creating them
 //!
 //! Projectively-extended rationals differ from normal rationals because they have
 //! a single, signless infinity and a single, signless zero. This means that `1/0`
