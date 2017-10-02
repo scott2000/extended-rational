@@ -1,15 +1,12 @@
 [package]
 name = "extended-rational"
-version = "1.1.1"
+version = "1.1.2"
 authors = ["Scott Taylor <scott11x8@gmail.com>"]
 
 description = "Provides implementations of high-accuracy projectively-extended rational numbers and macros for creating them."
-keywords = ["rational", "extended", "number", "infinity"]
-
+keywords = ["rational", "extended", "number", "infinity", "fraction"]
 readme = "README.md"
-
 license = "MIT"
-include = ["src/**/*", "Cargo.toml", "LICENSE"]
 categories = ["data-structures"]
 
-[dependencies]
+include = ["src/**/*", "Cargo.toml", "LICENSE"]
