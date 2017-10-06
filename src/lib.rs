@@ -930,6 +930,12 @@ impl Rational {
         }
     }
 
+    fn check_sign(&mut self) {
+        if !self.unsigned.is_signed() {
+            self.negative = false;
+        }
+    }
+
     fn add_sub_exact(&mut self, other: &mut Rational, sub: bool) -> bool {
         let negative = other.negative != sub;
         if self.negative != negative {
@@ -951,12 +957,6 @@ impl Rational {
         }
         self.check_sign();
         true
-    }
-
-    fn check_sign(&mut self) {
-        if !self.unsigned.is_signed() {
-            self.negative = false;
-        }
     }
 
     fn mul_div_exact(&mut self, other: &mut Rational, div: bool) -> bool {
