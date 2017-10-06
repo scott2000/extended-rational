@@ -489,17 +489,18 @@ impl URational {
         }
     }
 
+    fn shift_partial(a: &mut u64) {
+        if *a & 0b11 == 0b11 {
+            *a >>= 1;
+            *a += 1;
+        } else {
+            *a >>= 1;
+        }
+    }
+
     fn shift(&mut self) {
-        let shift_partial = |a: &mut u64| {
-            if *a & 1 == 1 {
-                *a >>= 1;
-                *a += 1;
-            } else {
-                *a >>= 1;
-            }
-        };
-        shift_partial(&mut self.numerator);
-        shift_partial(&mut self.denominator);
+        URational::shift_partial(&mut self.numerator);
+        URational::shift_partial(&mut self.denominator);
         self.simplify();
     }
 
