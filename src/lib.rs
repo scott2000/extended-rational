@@ -336,16 +336,16 @@ impl URational {
     }
 
     /// Returns the numerator of this rational.
-    #[inline(always)] pub fn numerator(&self) -> u64 { self.numerator }
+    #[inline(always)] pub fn numerator(self) -> u64 { self.numerator }
+
+    /// Returns the numerator of this rational mutably.
+    #[inline(always)] pub fn numerator_mut(&mut self) -> &mut u64 { &mut self.numerator }
 
     /// Returns the denominator of this rational.
-    #[inline(always)] pub fn denominator(&self) -> u64 { self.denominator }
+    #[inline(always)] pub fn denominator(self) -> u64 { self.denominator }
 
-    /// Returns the reciprocal of this rational.
-    #[inline] pub fn reciprocal(&self) -> URational { URational { numerator: self.denominator, denominator: self.numerator } }
-
-    /// Returns the complexity of this rational (max of numerator and denominator).
-    #[inline] pub fn complexity(&self) -> u64 { max(self.numerator, self.denominator) }
+    /// Returns the denominator of this rational mutably.
+    #[inline(always)] pub fn denominator_mut(&mut self) -> &mut u64 { &mut self.denominator }
 
     /// Returns the smallest value an unsigned rational can store.
     #[inline(always)] pub fn min_value() -> URational { URational { numerator: 0, denominator: 1 } }
@@ -369,31 +369,37 @@ impl URational {
     #[inline(always)] pub fn one() -> URational { URational { numerator: 1, denominator: 1 } }
 
     /// Returns `true` if this rational is `NaN` and `false` otherwise.
-    #[inline] pub fn is_nan(&self) -> bool { self.numerator == 0 && self.denominator == 0 }
+    #[inline] pub fn is_nan(self) -> bool { self.numerator == 0 && self.denominator == 0 }
 
     /// Returns `true` if this rational is `0` and `false` otherwise.
-    #[inline] pub fn is_zero(&self) -> bool { self.numerator == 0 && self.denominator != 0 }
+    #[inline] pub fn is_zero(self) -> bool { self.numerator == 0 && self.denominator != 0 }
 
     /// Returns `true` if this rational is `∞` and `false` otherwise.
-    #[inline] pub fn is_infinity(&self) -> bool { self.numerator != 0 && self.denominator == 0 }
+    #[inline] pub fn is_infinity(self) -> bool { self.numerator != 0 && self.denominator == 0 }
 
     /// Returns `true` if this rational is a signed number (not `NaN`, `0`, or `∞`) and `false` otherwise.
-    #[inline] pub fn is_signed(&self) -> bool { self.numerator != 0 && self.denominator != 0 }
+    #[inline] pub fn is_signed(self) -> bool { self.numerator != 0 && self.denominator != 0 }
+
+    /// Returns the reciprocal of this rational.
+    #[inline] pub fn reciprocal(self) -> URational { URational { numerator: self.denominator, denominator: self.numerator } }
+
+    /// Returns the complexity of this rational (max of numerator and denominator).
+    #[inline] pub fn complexity(self) -> u64 { max(self.numerator, self.denominator) }
 
     /// Returns this rational with no fractional component by rounding down.
-    pub fn floor(&self) -> URational {
+    pub fn floor(self) -> URational {
         if self.denominator != 0 {
             URational {
                 numerator: self.numerator / self.denominator,
                 denominator: 1,
             }
         } else {
-            *self
+            self
         }
     }
 
     /// Returns this rational with no fractional component by rounding.
-    pub fn round(&self) -> URational {
+    pub fn round(self) -> URational {
         if self.denominator != 0 {
             if (self.numerator % self.denominator) > self.denominator/2 {
                 URational {
@@ -407,12 +413,12 @@ impl URational {
                 }
             }
         } else {
-            *self
+            self
         }
     }
 
     /// Returns this rational with no fractional component by rounding up.
-    pub fn ceil(&self) -> URational {
+    pub fn ceil(self) -> URational {
         if self.denominator != 0 {
             if (self.numerator % self.denominator) != 0 {
                 URational {
@@ -426,7 +432,7 @@ impl URational {
                 }
             }
         } else {
-            *self
+            self
         }
     }
 
@@ -780,11 +786,29 @@ impl Rational {
         }
     }
 
-    /// Returns the underlying unsigned rational of this rational.
-    #[inline(always)] pub fn unsigned(&self) -> URational { self.unsigned }
+    /// Returns the underlying numerator of this rational.
+    #[inline(always)] pub fn numerator(self) -> u64 { self.unsigned.numerator }
+
+    /// Returns the underlying numerator of this rational mutably.
+    #[inline(always)] pub fn numerator_mut(&mut self) -> &mut u64 { &mut self.unsigned.numerator }
+
+    /// Returns the underlying denominator of this rational.
+    #[inline(always)] pub fn denominator(self) -> u64 { self.unsigned.denominator }
+
+    /// Returns the underlying denominator of this rational mutably.
+    #[inline(always)] pub fn denominator_mut(&mut self) -> &mut u64 { &mut self.unsigned.denominator }
 
     /// Returns the underlying sign of this rational.
-    #[inline(always)] pub fn sign(&self) -> bool { self.negative }
+    #[inline(always)] pub fn sign(self) -> bool { self.negative }
+
+    /// Returns the underlying sign of this rational mutably.
+    #[inline(always)] pub fn sign_mut(&mut self) -> &mut bool { &mut self.negative }
+
+    /// Returns the underlying unsigned rational of this rational.
+    #[inline(always)] pub fn unsigned(self) -> URational { self.unsigned }
+
+    /// Returns the underlying unsigned rational of this rational mutably.
+    #[inline(always)] pub fn unsigned_mut(&mut self) -> &mut URational { &mut self.unsigned }
 
     /// Returns the underlying unsigned rational of this rational, panicking if sign is negative.
     ///
@@ -794,15 +818,6 @@ impl Rational {
         debug_assert!(!self.negative, "cannot create a URational with a negative sign.");
         self.unsigned
     }
-
-    /// Returns the reciprocal of this rational.
-    #[inline] pub fn reciprocal(&self) -> Rational { Rational { unsigned: self.unsigned.reciprocal(), negative: self.negative } }
-
-    /// Returns the negative reciprocal of this rational.
-    #[inline] pub fn negative_reciprocal(&self) -> Rational { Rational::new_raw( self.unsigned.reciprocal(), !self.negative) }
-
-    /// Returns the complexity of this rational (max of absolute values of numerator and denominator).
-    #[inline(always)] pub fn complexity(&self) -> u64 { self.unsigned.complexity() }
 
     /// Returns the smallest value a signed rational can store.
     #[inline(always)] pub fn min_value() -> Rational { Rational { unsigned: URational { numerator: u64::MAX, denominator: 1 }, negative: true } }
@@ -832,26 +847,35 @@ impl Rational {
     #[inline(always)] pub fn negative_one() -> Rational { Rational { unsigned: URational { numerator: 1, denominator: 1 }, negative: true } }
 
     /// Returns `true` if this rational is `NaN` and `false` otherwise.
-    #[inline(always)] pub fn is_nan(&self) -> bool { self.unsigned.is_nan() }
+    #[inline(always)] pub fn is_nan(self) -> bool { self.unsigned.is_nan() }
 
     /// Returns `true` if this rational is `0` and `false` otherwise.
-    #[inline(always)] pub fn is_zero(&self) -> bool { self.unsigned.is_zero() }
+    #[inline(always)] pub fn is_zero(self) -> bool { self.unsigned.is_zero() }
 
     /// Returns `true` if this rational is `∞` and `false` otherwise.
-    #[inline(always)] pub fn is_infinity(&self) -> bool { self.unsigned.is_infinity() }
+    #[inline(always)] pub fn is_infinity(self) -> bool { self.unsigned.is_infinity() }
 
     /// Returns `true` if this rational is a signed number (not `NaN`, `0`, or `∞`) and `false` otherwise.
-    #[inline(always)] pub fn is_signed(&self) -> bool { self.unsigned.is_signed() }
+    #[inline(always)] pub fn is_signed(self) -> bool { self.unsigned.is_signed() }
 
     /// Returns `true` if this rational is a negative number and `false` otherwise.
-    #[inline(always)] pub fn is_negative(&self) -> bool { self.negative }
+    #[inline(always)] pub fn is_negative(self) -> bool { self.negative }
+
+    /// Returns the reciprocal of this rational.
+    #[inline] pub fn reciprocal(self) -> Rational { Rational { unsigned: self.unsigned.reciprocal(), negative: self.negative } }
+
+    /// Returns the negative reciprocal of this rational.
+    #[inline] pub fn negative_reciprocal(self) -> Rational { Rational::new_raw( self.unsigned.reciprocal(), !self.negative) }
+
+    /// Returns the complexity of this rational (max of absolute values of numerator and denominator).
+    #[inline(always)] pub fn complexity(self) -> u64 { self.unsigned.complexity() }
 
     /// Returns `true` if this rational is a positive number and `false` otherwise.
-    #[inline] pub fn is_positive(&self) -> bool { self.unsigned.is_signed() && !self.negative }
+    #[inline] pub fn is_positive(self) -> bool { self.unsigned.is_signed() && !self.negative }
 
     /// Returns this rational with no fractional component by rounding towards zero.
     #[inline]
-    pub fn floor(&self) -> Rational {
+    pub fn floor(self) -> Rational {
         Rational {
             unsigned: self.unsigned.floor(),
             negative: self.negative,
@@ -860,7 +884,7 @@ impl Rational {
 
     /// Returns this rational with no fractional component by rounding.
     #[inline]
-    pub fn round(&self) -> Rational {
+    pub fn round(self) -> Rational {
         Rational {
             unsigned: self.unsigned.round(),
             negative: self.negative,
@@ -869,7 +893,7 @@ impl Rational {
 
     /// Returns this rational with no fractional component by rounding away from zero.
     #[inline]
-    pub fn ceil(&self) -> Rational {
+    pub fn ceil(self) -> Rational {
         Rational {
             unsigned: self.unsigned.ceil(),
             negative: self.negative,
@@ -878,7 +902,7 @@ impl Rational {
 
     /// Returns this rational without a negative sign.
     #[inline]
-    pub fn abs(&self) -> Rational {
+    pub fn abs(self) -> Rational {
         Rational {
             unsigned: self.unsigned,
             negative: false,
