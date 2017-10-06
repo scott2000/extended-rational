@@ -24,6 +24,8 @@
 //! simpler fraction until they can succeed. Any invalid operations should
 //! return `NaN` instead of panicking.
 
+#![deny(missing_docs, trivial_casts, unused_macros)]
+
 use std::*;
 use std::cmp::*;
 use std::ops::*;
@@ -99,6 +101,12 @@ macro_rules! try_or {
         match $x {
             Some(x) => x,
             None => continue,
+        }
+    };
+    (return $r: expr; $x: expr) => {
+        match $x {
+            Some(x) => x,
+            None => return $r,
         }
     };
     (return $x: expr) => {
@@ -444,86 +452,171 @@ impl URational {
         self.simplify();
     }
 
-    fn add_sub(&mut self, other: &mut URational, sub: bool) {
+    /// Computes `self + other`, returning `None` if rounding occurred
+    pub fn add_exact(mut self, mut other: URational) -> Option<URational> {
+        if self.add_sub_exact(&mut other, false) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self - other`, returning `None` if rounding occurred
+    pub fn sub_exact(mut self, mut other: URational) -> Option<URational> {
+        if self.add_sub_exact(&mut other, true) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self * other`, returning `None` if rounding occurred
+    pub fn mul_exact(mut self, mut other: URational) -> Option<URational> {
+        if self.mul_div_exact(&mut other, false) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self / other`, returning `None` if rounding occurred
+    pub fn div_exact(mut self, mut other: URational) -> Option<URational> {
+        if self.mul_div_exact(&mut other, true) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self % other`, returning `None` if rounding occurred
+    pub fn rem_exact(mut self, mut other: URational) -> Option<URational> {
+        if self.rem_div_exact(&mut other) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    fn add_sub_exact(&mut self, other: &mut URational, sub: bool) -> bool {
         if sub && other > self && !other.is_infinity() {
             *self = URational::zero();
-            return;
+            return true;
+        } else if self.denominator == 0 && other.denominator == 0 {
+            *self = URational::nan();
+            return true;
+        } else if self.denominator == 0 {
+            return true;
+        } else if other.denominator == 0 {
+            *self = *other;
+            return true;
+        } else if self.denominator == other.denominator {
+            self.numerator = if sub {
+                try_or!(return false; self.numerator.checked_sub(other.numerator))
+            } else {
+                try_or!(return false; self.numerator.checked_add(other.numerator))
+            };
+            self.simplify();
+            return true;
         }
+        let common = try_or!(return false; lcm(self.denominator, other.denominator));
+        let self_mul = common / self.denominator;
+        let other_mul = common / other.denominator;
+        let n0 = try_or!(return false; self.numerator.checked_mul(self_mul));
+        let n1 = try_or!(return false; other.numerator.checked_mul(other_mul));
+        self.numerator = if sub {
+            try_or!(return false; n0.checked_sub(n1))
+        } else {
+            try_or!(return false; n0.checked_add(n1))
+        };
+        self.denominator = common;
+        self.simplify();
+        true
+    }
+
+    fn mul_div_exact(&mut self, other: &mut URational, div: bool) -> bool {
+        if div {
+            *other = other.reciprocal();
+        }
+        if self.is_nan() {
+            return true;
+        } else if other.is_nan() || (self.is_infinity() && other.is_zero()) || (self.is_zero() && other.is_infinity()) {
+            *self = URational::nan();
+            return true;
+        } else if !self.is_signed() {
+            return true;
+        } else if !other.is_signed() {
+            *self = *other;
+            return true;
+        }
+        let ndc = gcd(self.numerator, other.denominator);
+        self.numerator /= ndc;
+        other.denominator /= ndc;
+        let dnc = gcd(self.denominator, other.numerator);
+        self.denominator /= dnc;
+        other.numerator /= dnc;
+        let n = try_or!(return false; self.numerator.checked_mul(other.numerator));
+        self.denominator = try_or!(return false; self.denominator.checked_mul(other.denominator));
+        self.numerator = n;
+        true
+    }
+
+    fn rem_div_exact(&mut self, other: &mut URational) -> bool {
+        if self.is_nan() {
+            return true;
+        } else if other.is_nan() {
+            *self = URational::nan();
+            return true;
+        } else if other.is_zero() || self.is_infinity() {
+            *self = URational::zero();
+            return true;
+        } else if other.is_infinity() {
+            return true;
+        }
+        if self.denominator == other.denominator {
+            self.numerator = try_or!(return false; self.numerator.checked_rem(other.numerator));
+            self.simplify();
+            return true;
+        }
+        let common = try_or!(return false; lcm(self.denominator, other.denominator));
+        let self_mul = common / self.denominator;
+        let other_mul = common / other.denominator;
+        let n0 = try_or!(return false; self.numerator.checked_mul(self_mul));
+        let n1 = try_or!(return false; other.numerator.checked_mul(other_mul));
+        self.numerator = try_or!(return false; n0.checked_rem(n1));
+        self.denominator = common;
+        self.simplify();
+        true
+    }
+
+    fn add_sub(&mut self, other: &mut URational, sub: bool) {
         let mut first = true;
         loop {
             if first {
                 first = false;
-            } else {
+            } else if self >= other {
                 self.shift();
+            } else {
                 other.shift();
             }
-            if self.denominator == 0 && other.denominator == 0 {
-                *self = URational::nan();
-                return;
-            } else if self.denominator == 0 {
-                return;
-            } else if other.denominator == 0 {
-                *self = *other;
+            if URational::add_sub_exact(self, other, sub) {
                 return;
             }
-            if self.denominator == other.denominator {
-                self.numerator = if sub {
-                    try_or!(continue self.numerator.checked_sub(other.numerator))
-                } else {
-                    try_or!(continue self.numerator.checked_add(other.numerator))
-                };
-                self.simplify();
-                return;
-            }
-            let c = try_or!(continue lcm(self.denominator, other.denominator));
-            let a = c / self.denominator;
-            let b = c / other.denominator;
-            let n0 = try_or!(continue self.numerator.checked_mul(a));
-            let n1 = try_or!(continue other.numerator.checked_mul(b));
-            self.numerator = if sub {
-                try_or!(continue n0.checked_sub(n1))
-            } else {
-                try_or!(continue n0.checked_add(n1))
-            };
-            self.denominator = c;
-            self.simplify();
-            return;
         }
     }
 
     fn mul_div(&mut self, other: &mut URational, div: bool) {
-        if div {
-            *other = other.reciprocal();
-        }
         let mut first = true;
         loop {
             if first {
                 first = false;
-            } else {
+            } else if self >= other {
                 self.shift();
+            } else {
                 other.shift();
             }
-            if self.is_nan() {
-                return;
-            } else if other.is_nan() || (self.is_infinity() && other.is_zero()) || (self.is_zero() && other.is_infinity()) {
-                *self = URational::nan();
-                return;
-            } else if !self.is_signed() {
-                return;
-            } else if !other.is_signed() {
-                *self = *other;
+            if URational::mul_div_exact(self, other, div) {
                 return;
             }
-            let ndc = gcd(self.numerator, other.denominator);
-            self.numerator /= ndc;
-            other.denominator /= ndc;
-            let dnc = gcd(self.denominator, other.numerator);
-            self.denominator /= dnc;
-            other.numerator /= dnc;
-            let n = try_or!(continue self.numerator.checked_mul(other.numerator));
-            self.denominator = try_or!(continue self.denominator.checked_mul(other.denominator));
-            self.numerator = n;
-            return;
         }
     }
 
@@ -532,35 +625,14 @@ impl URational {
         loop {
             if first {
                 first = false;
-            } else {
+            } else if self >= other {
                 self.shift();
+            } else {
                 other.shift();
             }
-            if self.is_nan() {
-                return;
-            } else if other.is_nan() {
-                *self = URational::nan();
-                return;
-            } else if other.is_zero() || self.is_infinity() {
-                *self = URational::zero();
-                return;
-            } else if other.is_infinity() {
+            if URational::rem_div_exact(self, other) {
                 return;
             }
-            if self.denominator == other.denominator {
-                self.numerator = try_or!(continue self.numerator.checked_rem(other.numerator));
-                self.simplify();
-                return;
-            }
-            let c = try_or!(continue lcm(self.denominator, other.denominator));
-            let a = c / self.denominator;
-            let b = c / other.denominator;
-            let n0 = try_or!(continue self.numerator.checked_mul(a));
-            let n1 = try_or!(continue other.numerator.checked_mul(b));
-            self.numerator = try_or!(continue n0.checked_rem(n1));
-            self.denominator = c;
-            self.simplify();
-            return;
         }
     }
 }
@@ -714,6 +786,15 @@ impl Rational {
     /// Returns the underlying sign of this rational
     #[inline(always)] pub fn sign(&self) -> bool { self.negative }
 
+    /// Returns the underlying unsigned rational of this rational, panicking if sign is negative
+    ///
+    /// *Does not panic in optimized builds*
+    #[inline]
+    pub fn try_unsigned(self) -> URational {
+        debug_assert!(!self.negative, "cannot create a URational with a negative sign.");
+        self.unsigned
+    }
+
     /// Returns the reciprocal of this rational
     #[inline] pub fn reciprocal(&self) -> Rational { Rational { unsigned: self.unsigned.reciprocal(), negative: self.negative } }
 
@@ -804,20 +885,96 @@ impl Rational {
         }
     }
 
-    /// Returns this rational as a URational
-    ///
-    /// # Panics
-    ///
-    /// If this rational is negative. Doesn't panic in optimized builds.
-    #[inline]
-    pub fn try_unsigned(self) -> URational {
-        debug_assert!(!self.negative, "cannot create a URational with a negative sign.");
-        self.unsigned
+    /// Computes `self + other`, returning `None` if rounding occurred
+    pub fn add_exact(mut self, mut other: Rational) -> Option<Rational> {
+        if self.add_sub_exact(&mut other, false) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self - other`, returning `None` if rounding occurred
+    pub fn sub_exact(mut self, mut other: Rational) -> Option<Rational> {
+        if self.add_sub_exact(&mut other, true) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self * other`, returning `None` if rounding occurred
+    pub fn mul_exact(mut self, mut other: Rational) -> Option<Rational> {
+        if self.mul_div_exact(&mut other, false) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self / other`, returning `None` if rounding occurred
+    pub fn div_exact(mut self, mut other: Rational) -> Option<Rational> {
+        if self.mul_div_exact(&mut other, true) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    /// Computes `self % other`, returning `None` if rounding occurred
+    pub fn rem_exact(mut self, mut other: Rational) -> Option<Rational> {
+        if self.rem_div_exact(&mut other) {
+            Some(self)
+        } else {
+            None
+        }
+    }
+
+    fn add_sub_exact(&mut self, other: &mut Rational, sub: bool) -> bool {
+        let negative = other.negative != sub;
+        if self.negative != negative {
+            if self.unsigned >= other.unsigned {
+                if !self.unsigned.add_sub_exact(&mut other.unsigned, true) {
+                    return false;
+                }
+            } else {
+                self.negative = negative;
+                if !other.unsigned.add_sub_exact(&mut self.unsigned, true) {
+                    return false;
+                }
+                self.unsigned = other.unsigned;
+            };
+        } else {
+            if !self.unsigned.add_sub_exact(&mut other.unsigned, false) {
+                return false;
+            }
+        }
+        self.check_sign();
+        true
     }
 
     fn check_sign(&mut self) {
         if !self.unsigned.is_signed() {
             self.negative = false;
+        }
+    }
+
+    fn mul_div_exact(&mut self, other: &mut Rational, div: bool) -> bool {
+        self.negative = self.negative != other.negative;
+        if self.unsigned.mul_div_exact(&mut other.unsigned, div) {
+            self.check_sign();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn rem_div_exact(&mut self, other: &mut Rational) -> bool {
+        if self.unsigned.rem_div_exact(&mut other.unsigned) {
+            self.check_sign();
+            true
+        } else {
+            false
         }
     }
 
