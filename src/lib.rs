@@ -205,11 +205,10 @@ macro_rules! impl_float {
             impl From<$t> for Rational {
                 /// Attempts to approximate the given floating-point number with a signed rational.
                 ///
-                /// # Rounding
+                /// ## Rounding
                 ///
-                /// If the exponent is too large, `∞` will be returned.
-                ///
-                /// If the exponent is too small, `0` will be returned.
+                /// * If the exponent is too large, `∞` will be returned
+                /// * If the exponent is too small, `0` will be returned
                 fn from(f: $t) -> Rational {
                     match f.classify() {
                         std::num::FpCategory::Infinite => return Rational::infinity(),
@@ -260,6 +259,10 @@ macro_rules! impl_ops {
                 r
             }
         }
+    };
+    ($assign: ident $non: ident, $assign_name: ident $non_name: ident, $f: ident $($b: expr)*) => {
+        impl_ops!(URational; $assign $non, $assign_name $non_name, $f $($b)*);
+        impl_ops!(Rational; $assign $non, $assign_name $non_name, $f $($b)*);
     }
 }
 
@@ -641,6 +644,12 @@ impl URational {
                 return;
             }
         }
+    }
+}
+
+impl Default for URational {
+    fn default() -> URational {
+        URational::zero()
     }
 }
 
@@ -1031,6 +1040,12 @@ impl Rational {
     }
 }
 
+impl Default for Rational {
+    fn default() -> Rational {
+        Rational::zero()
+    }
+}
+
 impl PartialEq for Rational {
     fn eq(&self, other: &Rational) -> bool {
         self.unsigned == other.unsigned && (self.negative == other.negative || !(self.is_signed() || other.is_signed()))
@@ -1097,17 +1112,11 @@ impl fmt::Debug for Rational {
     }
 }
 
-impl_ops!(URational; AddAssign Add, add_assign add, add_sub false);
-impl_ops!(URational; SubAssign Sub, sub_assign sub, add_sub true);
-impl_ops!(URational; MulAssign Mul, mul_assign mul, mul_div false);
-impl_ops!(URational; DivAssign Div, div_assign div, mul_div true);
-impl_ops!(URational; RemAssign Rem, rem_assign rem, rem_div);
-
-impl_ops!(Rational; AddAssign Add, add_assign add, add_sub false);
-impl_ops!(Rational; SubAssign Sub, sub_assign sub, add_sub true);
-impl_ops!(Rational; MulAssign Mul, mul_assign mul, mul_div false);
-impl_ops!(Rational; DivAssign Div, div_assign div, mul_div true);
-impl_ops!(Rational; RemAssign Rem, rem_assign rem, rem_div);
+impl_ops!(AddAssign Add, add_assign add, add_sub false);
+impl_ops!(SubAssign Sub, sub_assign sub, add_sub true);
+impl_ops!(MulAssign Mul, mul_assign mul, mul_div false);
+impl_ops!(DivAssign Div, div_assign div, mul_div true);
+impl_ops!(RemAssign Rem, rem_assign rem, rem_div);
 
 impl Neg for Rational {
     type Output = Rational;
@@ -1135,7 +1144,8 @@ impl From<(URational, bool)> for Rational {
     }
 }
 
+impl_float!(f64 [64, 52] f32 [32, 23]);
+
 impl_u_from!(u64 u32 u16 u8);
 
 impl_from!(i64 i32 i16 i8);
-impl_float!(f64 [64, 52] f32 [32, 23]);
