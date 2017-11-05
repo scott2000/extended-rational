@@ -23,8 +23,23 @@
 //! No operation should ever panic. Operations that overflow round each input to a
 //! simpler fraction until they can succeed. Any invalid operations should
 //! return `NaN` instead of panicking.
+//!
+//! # Additional Features
+//!
+//! For use with the [bit manager] crate, add this to your `Cargo.toml`:
+//!
+//! ```toml
+//! [features]
+//! default = ["extended-rational/bit_manager_enabled"]
+//! ```
+//!
+//! [bit manager]: http://docs.rs/bit_manager
 
 #![deny(missing_docs, trivial_casts, unused_macros)]
+
+#[macro_use]
+#[cfg(feature="bit_manager_enabled")]
+extern crate bit_manager_derive;
 
 use std::*;
 use std::cmp::*;
@@ -322,6 +337,7 @@ pub fn lcm(a: u64, b: u64) -> Option<u64> {
 /// # }
 /// ```
 #[derive(Copy, Clone)]
+#[cfg_attr(feature="bit_manager_enabled", derive(BitStore))]
 pub struct URational {
     numerator: u64,
     denominator: u64,
@@ -761,6 +777,7 @@ impl fmt::Debug for URational {
 /// # }
 /// ```
 #[derive(Copy, Clone)]
+#[cfg_attr(feature="bit_manager_enabled", derive(BitStore))]
 pub struct Rational {
     unsigned: URational,
     negative: bool,
